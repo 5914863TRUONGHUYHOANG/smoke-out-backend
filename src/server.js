@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { pool } from './db.js';
+import { pool, tx } from './db.js';
 import { createExerciseLog } from './exerciseLogs.js';
 import { ingestRecords } from './health.js';
 import { syncFitbit } from './fitbit.js';
@@ -64,6 +64,31 @@ app.get('/api/exercises', wrap(async (req, res) => {
   res.json(rows);
 }));
 
+app.get('/api/rankings', wrap(async (req, res) => {
+  const { limit } = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  }).parse(req.query);
+  const { rows } = await pool.query(
+    `WITH totals AS (
+       SELECT u.user_id, u.username, COALESCE(SUM(p.points), 0)::integer AS total_points
+       FROM users u
+       LEFT JOIN point_logs p ON p.user_id = u.user_id
+       GROUP BY u.user_id, u.username
+     ),
+     ranked AS (
+       SELECT RANK() OVER (ORDER BY total_points DESC) AS rank,
+              user_id, username, total_points
+       FROM totals
+     )
+     SELECT rank, user_id, username, total_points
+     FROM ranked
+     ORDER BY rank, username
+     LIMIT $1`,
+    [limit]
+  );
+  res.json(rows);
+}));
+
 // Symptom Log POST
 app.post('/api/symptom-logs', wrap(async (req, res) => {
   const body = symptomLogSchema.parse(req.body);
@@ -78,12 +103,16 @@ app.post('/api/symptom-logs', wrap(async (req, res) => {
 // Smoke Log POST
 app.post('/api/smoke-logs', wrap(async (req, res) => {
   const body = smokeLogSchema.parse(req.body);
-  const { rows } = await pool.query(
-    `INSERT INTO smoke_logs (user_id, cigarettes_smoked, trigger_cause)
-     VALUES ($1, $2, $3) RETURNING smoke_log_id`,
-    [req.userId, body.cigarettesSmoked, body.triggerCause ?? null]
-  );
-  res.status(201).json({ smokeLogId: rows[0].smoke_log_id });
+  const smokeLogId = await tx(async (client) => {
+    const { rows } = await client.query(
+      `INSERT INTO smoke_logs (user_id, cigarettes_smoked, trigger_cause)
+       VALUES ($1, $2, $3) RETURNING smoke_log_id`,
+      [req.userId, body.cigarettesSmoked, body.triggerCause ?? null]
+    );
+    await client.query('UPDATE users SET quit_start_date = CURRENT_DATE WHERE user_id = $1', [req.userId]);
+    return rows[0].smoke_log_id;
+  });
+  res.status(201).json({ smokeLogId });
 }));
 
 // 운동 완료 제출 → 검증
@@ -94,7 +123,7 @@ app.post('/api/exercise-logs', wrap(async (req, res) => {
 
 app.get('/api/exercise-logs', wrap(async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM exercise_logs WHERE user_id=$1 ORDER BY completed_at DESC LIMIT 100', [req.userId]);
+    'SELECT * FROM exercise_sessions WHERE user_id=$1 ORDER BY completed_at DESC LIMIT 100', [req.userId]);
   res.json(rows);
 }));
 

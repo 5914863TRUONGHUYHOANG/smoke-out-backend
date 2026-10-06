@@ -44,4 +44,16 @@ export function verifyExercise({ exercise, startedAt, completedAt, durationCompl
   return { status: 'VERIFIED', reason: '헬스 데이터로 검증됨' };
 }
 
-export function pointsFor(minutes) { return 10 + Math.min(minutes, 60); }
+export const AI_EXERCISE_POINTS = 10;
+export const DAILY_AI_EXERCISE_POINT_CAP = 50;
+
+export function pointsFor(dailyPoints = 0) {
+  return Math.max(0, Math.min(AI_EXERCISE_POINTS, DAILY_AI_EXERCISE_POINT_CAP - dailyPoints));
+}
+
+export function quitMilestonePointsFor(dayCount) {
+  if (dayCount === 3) return 30;
+  if (dayCount === 7) return 40;
+  if (dayCount >= 10 && dayCount % 10 === 0) return 60;
+  return 0;
+}

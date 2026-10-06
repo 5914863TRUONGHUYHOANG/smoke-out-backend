@@ -4,6 +4,10 @@
 
 GET {{host}}/health
 
+### 전체 포인트 랭킹 (기본 상위 50명, 최대 100명)
+GET {{host}}/api/rankings?limit=50
+x-user-id: {{uid}}
+
 ### FCM 토큰 등록 (Firebase Admin SDK 서비스 계정 설정 필요)
 PUT {{host}}/api/notifications/fcm-token
 Content-Type: application/json

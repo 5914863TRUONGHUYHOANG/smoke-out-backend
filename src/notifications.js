@@ -1,6 +1,7 @@
 import { applicationDefault, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { pool } from './db.js';
+import { awardDueQuitMilestones } from './points.js';
 
 const schedulerIntervalMs = 60_000;
 const maxAttempts = 10;
@@ -185,6 +186,7 @@ async function deliverPendingNotifications() {
 }
 
 async function runNotificationScheduler() {
+  await awardDueQuitMilestones();
   await enqueueDueNotifications();
   await deliverPendingNotifications();
 }
