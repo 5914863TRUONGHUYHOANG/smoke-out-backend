@@ -1,8 +1,22 @@
 ### VS Code "REST Client" 확장으로 실행
 @host = http://localhost:3000
-@uid = 1
+@uid = 00000000-0000-4000-8000-000000000001
 
 GET {{host}}/health
+
+### FCM 토큰 등록 (Firebase Admin SDK 서비스 계정 설정 필요)
+PUT {{host}}/api/notifications/fcm-token
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "fcmToken": "device-fcm-registration-token" }
+
+### FCM 토큰 해제
+DELETE {{host}}/api/notifications/fcm-token
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "fcmToken": "device-fcm-registration-token" }
 
 ###
 POST {{host}}/api/exercise-logs

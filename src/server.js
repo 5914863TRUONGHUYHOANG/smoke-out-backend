@@ -4,16 +4,25 @@ import { pool } from './db.js';
 import { createExerciseLog } from './exerciseLogs.js';
 import { ingestRecords } from './health.js';
 import { syncFitbit } from './fitbit.js';
+import { startNotificationScheduler } from './notifications.js';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 // 개발용 인증: x-user-id 헤더. 운영에서는 JWT 등으로 교체하세요.
-app.use('/api', (req, res, next) => {
-  const id = Number(req.header('x-user-id'));
-  if (!Number.isInteger(id) || id <= 0) return res.status(401).json({ error: 'x-user-id header required' });
-  req.userId = id;
-  next();
+app.use('/api', async (req, res, next) => {
+  const id = req.header('x-user-id')?.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id ?? '');
+  const isPositiveInteger = /^[1-9]\d*$/.test(id ?? '');
+  if (!isUuid && !isPositiveInteger) return res.status(401).json({ error: 'x-user-id header required' });
+  const userId = isUuid ? id.toLowerCase() : id;
+  req.userId = userId;
+  try {
+    await pool.query('UPDATE users SET last_access_at = NOW() WHERE user_id::text = $1', [userId]);
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 const dt = z.string().datetime({ offset: true });
@@ -105,6 +114,23 @@ app.put('/api/health/connections/fitbit', wrap(async (req, res) => {
   res.status(204).end();
 }));
 
+app.put('/api/notifications/fcm-token', wrap(async (req, res) => {
+  const { fcmToken } = z.object({ fcmToken: z.string().min(1).max(4096) }).parse(req.body);
+  await pool.query(
+    `INSERT INTO fcm_device_tokens (fcm_token, user_id)
+     VALUES ($1, $2)
+     ON CONFLICT (fcm_token) DO UPDATE SET user_id = EXCLUDED.user_id, updated_at = NOW()`,
+    [fcmToken, req.userId]
+  );
+  res.status(204).end();
+}));
+
+app.delete('/api/notifications/fcm-token', wrap(async (req, res) => {
+  const { fcmToken } = z.object({ fcmToken: z.string().min(1).max(4096) }).parse(req.body);
+  await pool.query('DELETE FROM fcm_device_tokens WHERE fcm_token = $1 AND user_id = $2', [fcmToken, req.userId]);
+  res.status(204).end();
+}));
+
 app.post('/api/health/fitbit/sync', wrap(async (req, res) => {
   const { afterDate } = z.object({ afterDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
   res.json(await syncFitbit(req.userId, afterDate));
@@ -117,4 +143,7 @@ app.use((err, _req, res, _next) => {
   res.status(err.status ?? 500).json({ error: err.message });
 });
 
-app.listen(process.env.PORT ?? 3000, () => console.log(`API on :${process.env.PORT ?? 3000}`));
+app.listen(process.env.PORT ?? 3000, () => {
+  console.log(`API on :${process.env.PORT ?? 3000}`);
+  startNotificationScheduler();
+});

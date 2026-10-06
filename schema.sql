@@ -9,10 +9,46 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     quit_start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    last_access_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     total_points INT DEFAULT 0 CHECK (total_points >= 0),
     fitness_level VARCHAR(20) NOT NULL DEFAULT 'BEGINNER' CHECK (fitness_level IN ('BEGINNER', 'INTERMEDIATE', 'ADVANCED')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Upgrade existing databases as well as creating the column for new installations.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_access_at TIMESTAMP WITH TIME ZONE;
+UPDATE users SET last_access_at = CURRENT_TIMESTAMP WHERE last_access_at IS NULL;
+ALTER TABLE users ALTER COLUMN last_access_at SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ALTER COLUMN last_access_at SET NOT NULL;
+
+-- Device tokens are keyed by token so one account can use multiple devices.
+CREATE TABLE IF NOT EXISTS fcm_device_tokens (
+    fcm_token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_fcm_device_tokens_user_id ON fcm_device_tokens(user_id);
+
+-- The outbox deduplicates scheduled notifications and retries transient FCM failures.
+CREATE TABLE IF NOT EXISTS notification_outbox (
+    notification_id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    notification_type VARCHAR(30) NOT NULL CHECK (notification_type IN ('INACTIVITY', 'QUIT_MILESTONE')),
+    notification_key VARCHAR(100) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    body TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'PROCESSING', 'SENT', 'FAILED', 'SKIPPED')),
+    attempts INT NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    locked_until TIMESTAMP WITH TIME ZONE,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    last_error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_user_notification UNIQUE (user_id, notification_type, notification_key)
+);
+CREATE INDEX IF NOT EXISTS idx_notification_outbox_pending
+    ON notification_outbox(status, next_attempt_at, created_at);
 
 -- 3. DAILY SUMMARIES TABLE
 CREATE TABLE IF NOT EXISTS daily_summaries (
