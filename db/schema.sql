@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     quit_start_date DATE NOT NULL DEFAULT CURRENT_DATE,
     total_points INT DEFAULT 0 CHECK (total_points >= 0),
-    fitness_level VARCHAR(20) NOT NULL DEFAULT 'BEGINNER' CHECK (fitness_level IN ('BEGINNER', 'INTERMEDIATE', 'ADVANCED')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -33,7 +32,6 @@ CREATE TABLE IF NOT EXISTS craving_logs (
     intensity_after INT CHECK (intensity_after BETWEEN 1 AND 10),
     recommended_exercise VARCHAR(100),
     points_earned INT DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
