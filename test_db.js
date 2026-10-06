@@ -1,4 +1,4 @@
-const pool = require('./db');
+import pool from './db.js';
 
 async function createDummyUser() {
     try {
@@ -7,7 +7,6 @@ async function createDummyUser() {
             VALUES ($1, $2, $3)
             ON CONFLICT (email) DO NOTHING;
         `;
-        // testing계정 만들기Tạo tài khoản: email: test@gmail.com | password: 123456
         await pool.query(query, ['Tester', 'test@gmail.com', '123456']);
         
         console.log('✅ testing계정 만들었습니다! Email: test@gmail.com | Pass: 123456');
