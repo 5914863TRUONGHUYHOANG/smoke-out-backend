@@ -4,6 +4,8 @@ import { pool } from './db.js';
 import { createExerciseLog } from './exerciseLogs.js';
 import { ingestRecords } from './health.js';
 import { syncFitbit } from './fitbit.js';
+import { recommend } from './reco/service.js';
+import { SYMPTOMS } from './reco/ranking.js';
 import { claimMilestones, pointSummary } from './points/service.js';
 
 const app = express();
@@ -41,7 +43,7 @@ const wrap = (fn) => (req, res, next) => fn(req, res).catch(next);
 app.get('/health', (_q, r) => r.json({ ok: true }));
 
 app.get('/api/exercises', wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM exercises ORDER BY exercise_id');
+  const { rows } = await pool.query('SELECT * FROM exercises WHERE is_active ORDER BY exercise_id');
   res.json(rows);
 }));
 
@@ -85,12 +87,27 @@ app.post('/api/smoke-logs', wrap(async (req, res) => {
   res.status(201).json({ ok: true });
 }));
 
-// --- AI 추천 발급 (개발용 스텁: 실제로는 AI 서비스가 서버 내부에서 호출) ---
+// --- AI 운동 추천: 운동 카탈로그 안에서만 선택 ---
+const recoSchema = z.object({
+  symptomType: z.enum(SYMPTOMS),
+  cravingLevel: z.number().int().min(0).max(10),
+  availableMinutes: z.number().int().min(1).max(120).default(15),
+  location: z.enum(['ANY', 'INDOOR', 'OUTDOOR']).default('ANY'),
+  hasEquipment: z.boolean().default(false),
+});
 app.post('/api/recommendations', wrap(async (req, res) => {
-  const { exerciseId } = z.object({ exerciseId: z.number().int().positive() }).parse(req.body);
-  const { rows: [r] } = await pool.query(
-    'INSERT INTO ai_recommendations(user_id,exercise_id) VALUES($1,$2) RETURNING *', [req.userId, exerciseId]);
-  res.status(201).json(r);
+  res.status(201).json(await recommend(req.userId, recoSchema.parse(req.body)));
+}));
+
+// --- 사용자 건강 상태 (추천 안전 필터에 사용) ---
+app.put('/api/profile/health', wrap(async (req, res) => {
+  const b = z.object({
+    fitnessLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']),
+    healthFlags: z.array(z.enum(['HEART_CONDITION', 'HYPERTENSION', 'ASTHMA', 'PREGNANCY', 'JOINT_PAIN', 'BACK_PAIN'])).default([]),
+  }).parse(req.body);
+  const r = await pool.query('UPDATE user_profiles SET fitness_level=$2, health_flags=$3 WHERE user_id=$1', [req.userId, b.fitnessLevel, b.healthFlags]);
+  if (!r.rowCount) return res.status(404).json({ error: 'profile not found' });
+  res.status(204).end();
 }));
 
 // --- 포인트 ---

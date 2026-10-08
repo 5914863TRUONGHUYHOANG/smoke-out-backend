@@ -40,22 +40,25 @@ export function createExerciseLog(userId, b) {
   return tx(async (c) => {
     const { rows: [ex] } = await c.query('SELECT * FROM exercises WHERE exercise_id=$1', [b.exerciseId]);
     if (!ex) throw Object.assign(new Error('exercise not found'), { status: 404 });
-    if (b.symptomLogId) {
-      const { rowCount } = await c.query('SELECT 1 FROM symptom_logs WHERE symptom_log_id=$1 AND user_id=$2', [b.symptomLogId, userId]);
-      if (!rowCount) throw Object.assign(new Error('symptom log not found'), { status: 404 });
-    }
+
+    let symptomLogId = b.symptomLogId ?? null;
     if (b.recommendationId) {
       const { rows: [rec] } = await c.query(
-        'SELECT * FROM ai_recommendations WHERE recommendation_id=$1 AND user_id=$2 FOR UPDATE', [b.recommendationId, userId]);
+        'SELECT *, expires_at > now() AS valid FROM ai_recommendations WHERE recommendation_id=$1 AND user_id=$2 FOR UPDATE',
+        [b.recommendationId, userId]);
       if (!rec || Number(rec.exercise_id) !== b.exerciseId)
         throw Object.assign(new Error('invalid recommendation'), { status: 400 });
-      const { rowCount } = await c.query('SELECT 1 FROM ai_recommendations WHERE recommendation_id=$1 AND expires_at > now()', [b.recommendationId]);
-      if (!rowCount) throw Object.assign(new Error('recommendation expired'), { status: 400 });
+      if (!rec.valid) throw Object.assign(new Error('recommendation expired'), { status: 400 });
+      symptomLogId ??= rec.symptom_log_id; // 추천 때 기록한 증상과 자동 연결
+    }
+    if (symptomLogId) {
+      const { rowCount } = await c.query('SELECT 1 FROM symptom_logs WHERE symptom_log_id=$1 AND user_id=$2', [symptomLogId, userId]);
+      if (!rowCount) throw Object.assign(new Error('symptom log not found'), { status: 404 });
     }
     const { rows: [log] } = await c.query(
       `INSERT INTO exercise_logs(user_id,exercise_id,symptom_log_id,recommendation_id,duration_completed,intensity_after,started_at,completed_at)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [userId, b.exerciseId, b.symptomLogId ?? null, b.recommendationId ?? null, b.durationCompleted, b.intensityAfter ?? null, b.startedAt, b.completedAt]);
+      [userId, b.exerciseId, symptomLogId, b.recommendationId ?? null, b.durationCompleted, b.intensityAfter ?? null, b.startedAt, b.completedAt]);
     const v = await apply(c, log, ex);
     return { exerciseLogId: log.exercise_log_id, ...v };
   });

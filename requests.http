@@ -17,3 +17,17 @@ Content-Type: application/json
 x-user-id: {{uid}}
 
 { "provider": "HEALTH_CONNECT", "records": [ { "externalId": "w-1", "activityType": "Running", "startedAt": "2026-10-02T10:00:00+09:00", "endedAt": "2026-10-02T10:21:00+09:00", "avgHeartRate": 125, "steps": 2400 } ] }
+
+### 건강 상태 등록 (안전 필터용)
+PUT {{host}}/api/profile/health
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "fitnessLevel": "BEGINNER", "healthFlags": ["HYPERTENSION"] }
+
+### AI 운동 추천 (카탈로그 안에서만 선택)
+POST {{host}}/api/recommendations
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "symptomType": "CRAVING", "cravingLevel": 8, "availableMinutes": 10, "location": "INDOOR" }
