@@ -6,6 +6,7 @@ import { ingestRecords } from './health.js';
 import { syncFitbit } from './fitbit.js';
 import { recommend } from './reco/service.js';
 import { SYMPTOMS } from './reco/ranking.js';
+import { coachChat, coachHistory } from './coach/service.js';
 import { claimMilestones, pointSummary } from './points/service.js';
 
 const app = express();
@@ -109,6 +110,13 @@ app.put('/api/profile/health', wrap(async (req, res) => {
   if (!r.rowCount) return res.status(404).json({ error: 'profile not found' });
   res.status(204).end();
 }));
+
+// --- AI coach (tool calling) ---
+app.post('/api/coach', wrap(async (req, res) => {
+  const { message } = z.object({ message: z.string().trim().min(1).max(500) }).parse(req.body);
+  res.json(await coachChat(req.userId, message));
+}));
+app.get('/api/coach/history', wrap(async (req, res) => res.json(await coachHistory(req.userId))));
 
 // --- 포인트 ---
 app.post('/api/points/claim-milestones', wrap(async (req, res) => res.json(await claimMilestones(req.userId))));

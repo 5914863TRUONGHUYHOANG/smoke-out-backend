@@ -41,7 +41,7 @@ export async function awardAiExercise(c, { userId, exerciseLogId, completedAt })
 }
 
 /** 연속 금연 구간의 시작 = max(금연 시작일, 마지막 흡연 기록) */
-async function streakStartOf(c, userId) {
+export async function streakStartOf(c, userId) {
   const { rows: [p] } = await c.query('SELECT quit_start_date FROM user_profiles WHERE user_id=$1', [userId]);
   if (!p) throw Object.assign(new Error('profile not found'), { status: 404 });
   const { rows: [s] } = await c.query(

@@ -31,3 +31,14 @@ Content-Type: application/json
 x-user-id: {{uid}}
 
 { "symptomType": "CRAVING", "cravingLevel": 8, "availableMinutes": 10, "location": "INDOOR" }
+
+### AI coach chat (tool calling) - needs LLM_API_KEY / LLM_MODEL in .env
+POST {{host}}/api/coach
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "message": "I really want a cigarette right now, I only have 10 minutes at home." }
+
+###
+GET {{host}}/api/coach/history
+x-user-id: {{uid}}
