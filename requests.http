@@ -1,0 +1,19 @@
+### VS Code "REST Client" 확장으로 실행
+@host = http://localhost:3000
+@uid = 1
+
+GET {{host}}/health
+
+###
+POST {{host}}/api/exercise-logs
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "exerciseId": 1, "startedAt": "2026-10-02T10:00:00+09:00", "completedAt": "2026-10-02T10:20:00+09:00", "durationCompleted": 20, "intensityAfter": 3 }
+
+###
+POST {{host}}/api/health/records
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "provider": "HEALTH_CONNECT", "records": [ { "externalId": "w-1", "activityType": "Running", "startedAt": "2026-10-02T10:00:00+09:00", "endedAt": "2026-10-02T10:21:00+09:00", "avgHeartRate": 125, "steps": 2400 } ] }
