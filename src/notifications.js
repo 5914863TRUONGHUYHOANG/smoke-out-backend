@@ -1,7 +1,8 @@
 import { applicationDefault, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { pool } from './db.js';
-import { awardDueQuitMilestones } from './points.js';
+import { claimMilestones } from './points/service.js';
+import { kstDate } from './points/policy.js';
 
 const schedulerIntervalMs = 60_000;
 const maxAttempts = 10;
@@ -19,6 +20,19 @@ export function buildQuitMilestoneNotification(dayCount) {
   return {
     type: 'QUIT_MILESTONE',
     key: `quit-day-${dayCount}`,
+    title: `금연 ${dayCount}일째, 정말 대단해요!`,
+    body: `${dayCount}일 동안 이어온 금연, 오늘도 계속 응원할게요. 스스로를 마음껏 칭찬해 주세요!`,
+  };
+}
+
+function buildPolicyMilestoneNotification(dayCount) {
+  if (!Number.isInteger(dayCount)
+    || !(dayCount === 3 || dayCount === 7 || (dayCount >= 17 && (dayCount - 7) % 10 === 0))) {
+    throw new RangeError('Invalid quit milestone day');
+  }
+  return {
+    type: 'QUIT_MILESTONE',
+    key: `quit-day-${dayCount}-${kstDate(new Date())}`,
     title: `금연 ${dayCount}일째, 정말 대단해요!`,
     body: `${dayCount}일 동안 이어온 금연, 오늘도 계속 응원할게요. 스스로를 마음껏 칭찬해 주세요!`,
   };
@@ -49,23 +63,22 @@ async function enqueueDueNotifications() {
   }
 
   const { rows: milestoneUsers } = await pool.query(
-    `SELECT u.user_id::text AS user_id,
-            (CURRENT_DATE - u.quit_start_date)::integer AS day_count
-     FROM users u
-     WHERE u.quit_start_date < CURRENT_DATE
-       AND (CURRENT_DATE - u.quit_start_date) % 10 = 0
-       AND EXISTS (SELECT 1 FROM fcm_device_tokens t WHERE t.user_id = u.user_id::text)`
+    `SELECT DISTINCT p.user_id
+     FROM user_profiles p
+     JOIN fcm_device_tokens t ON t.user_id = p.user_id`
   );
 
   for (const user of milestoneUsers) {
-    const notification = buildQuitMilestoneNotification(user.day_count);
-    await pool.query(
-      `INSERT INTO notification_outbox
-         (user_id, notification_type, notification_key, title, body)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, notification_type, notification_key) DO NOTHING`,
-      [user.user_id, notification.type, notification.key, notification.title, notification.body]
-    );
+    const { granted } = await claimMilestones(user.user_id);
+    for (const milestone of granted) {
+      const notification = buildPolicyMilestoneNotification(milestone.day);
+      await pool.query(
+        `INSERT INTO notification_outbox
+           (user_id, notification_type, notification_key, title, body)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id, notification_type, notification_key) DO NOTHING`,
+        [user.user_id, notification.type, notification.key, notification.title, notification.body]);
+    }
   }
 }
 
@@ -186,7 +199,6 @@ async function deliverPendingNotifications() {
 }
 
 async function runNotificationScheduler() {
-  await awardDueQuitMilestones();
   await enqueueDueNotifications();
   await deliverPendingNotifications();
 }

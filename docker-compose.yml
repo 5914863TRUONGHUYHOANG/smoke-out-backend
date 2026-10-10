@@ -9,6 +9,12 @@ services:
     ports: ["5433:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db:/docker-entrypoint-initdb.d:ro
+      - ./db/01_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./db/02_health.sql:/docker-entrypoint-initdb.d/02_health.sql:ro
+      - ./db/03_points.sql:/docker-entrypoint-initdb.d/03_points.sql:ro
+      - ./db/04_exercise_catalog.sql:/docker-entrypoint-initdb.d/04_exercise_catalog.sql:ro
+      - ./db/05_seed_exercises.sql:/docker-entrypoint-initdb.d/05_seed_exercises.sql:ro
+      - ./db/06_coach.sql:/docker-entrypoint-initdb.d/06_coach.sql:ro
+      - ./db/07_notifications.sql:/docker-entrypoint-initdb.d/07_notifications.sql:ro
 volumes:
   pgdata:

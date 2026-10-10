@@ -1,15 +1,21 @@
-import pkg from 'pg';
-const { Pool } = pkg;
+import pg from 'pg';
 
-export const pool = new Pool({
-  user: process.env.DB_USER || 'app',
-  host: process.env.DB_HOST || '127.0.0.1',
-  database: process.env.DB_NAME || 'quitsmoke',
-  password: process.env.DB_PASSWORD || 'change_me_please',
-  port: process.env.DB_PORT || 5433,
-});
+pg.types.setTypeParser(1114, (value) => new Date(`${value.replace(' ', 'T')}Z`));
 
-export const tx = async (callback) => {
+const poolConfig = process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL }
+  : {
+      user: process.env.DB_USER || 'app',
+      host: process.env.DB_HOST || '127.0.0.1',
+      database: process.env.DB_NAME || 'quitsmoke',
+      password: process.env.DB_PASSWORD || 'change_me_please',
+      port: Number(process.env.DB_PORT || 5433),
+    };
+
+export const pool = new pg.Pool(poolConfig);
+pool.on('connect', (client) => client.query("SET TIME ZONE 'UTC'"));
+
+export async function tx(callback) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -22,6 +28,6 @@ export const tx = async (callback) => {
   } finally {
     client.release();
   }
-};
+}
 
 export default pool;

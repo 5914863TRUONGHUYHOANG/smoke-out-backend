@@ -1,11 +1,36 @@
 ### VS Code "REST Client" 확장으로 실행
 @host = http://localhost:3000
-@uid = 00000000-0000-4000-8000-000000000001
+@uid = 1
 
 GET {{host}}/health
 
 ### 전체 포인트 랭킹 (기본 상위 50명, 최대 100명)
 GET {{host}}/api/rankings?limit=50
+x-user-id: {{uid}}
+
+### AI 추천 운동 (카탈로그 안에서만 선택)
+POST {{host}}/api/recommendations
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "symptomType": "CRAVING", "cravingLevel": 8, "availableMinutes": 10, "location": "INDOOR" }
+
+### 사용자 건강 상태 (추천 안전 필터용)
+PUT {{host}}/api/profile/health
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "fitnessLevel": "BEGINNER", "healthFlags": ["HYPERTENSION"] }
+
+### AI coach chat (tool calling) - needs LLM_API_KEY / LLM_MODEL in .env
+POST {{host}}/api/coach
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "message": "I really want a cigarette right now, I only have 10 minutes at home." }
+
+###
+GET {{host}}/api/coach/history
 x-user-id: {{uid}}
 
 ### FCM 토큰 등록 (Firebase Admin SDK 서비스 계정 설정 필요)
@@ -35,3 +60,28 @@ Content-Type: application/json
 x-user-id: {{uid}}
 
 { "provider": "HEALTH_CONNECT", "records": [ { "externalId": "w-1", "activityType": "Running", "startedAt": "2026-10-02T10:00:00+09:00", "endedAt": "2026-10-02T10:21:00+09:00", "avgHeartRate": 125, "steps": 2400 } ] }
+
+### 건강 상태 등록 (안전 필터용)
+PUT {{host}}/api/profile/health
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "fitnessLevel": "BEGINNER", "healthFlags": ["HYPERTENSION"] }
+
+### AI 운동 추천 (카탈로그 안에서만 선택)
+POST {{host}}/api/recommendations
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "symptomType": "CRAVING", "cravingLevel": 8, "availableMinutes": 10, "location": "INDOOR" }
+
+### AI coach chat (tool calling) - needs LLM_API_KEY / LLM_MODEL in .env
+POST {{host}}/api/coach
+Content-Type: application/json
+x-user-id: {{uid}}
+
+{ "message": "I really want a cigarette right now, I only have 10 minutes at home." }
+###
+GET {{host}}/api/coach/history
+x-user-id: {{uid}}
+x-user-id: {{uid}}
