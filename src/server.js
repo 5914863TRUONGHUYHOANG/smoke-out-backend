@@ -1,6 +1,8 @@
 import express from 'express';
+import cors from 'cors';
 import { z } from 'zod';
 import { pool, tx } from './db.js';
+import { registerUser, loginUser } from './auth.js';
 import { createExerciseLog } from './exerciseLogs.js';
 import { ingestRecords } from './health.js';
 import { syncFitbit } from './fitbit.js';
@@ -11,9 +13,20 @@ import { claimMilestones, pointSummary } from './points/service.js';
 import { startNotificationScheduler } from './notifications.js';
 
 const app = express();
+app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
+const PUBLIC_API_PATHS = new Set([
+  '/login',
+  '/signup',
+  '/register',
+  '/auth/login',
+  '/auth/signup',
+  '/auth/register',
+]);
+
 app.use('/api', async (req, res, next) => {
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
   const id = req.header('x-user-id')?.trim();
   if (!/^[1-9]\d*$/.test(id ?? '')) {
     return res.status(401).json({ error: 'x-user-id header required' });
@@ -52,7 +65,30 @@ const recordSchema = z.object({
 });
 const wrap = (fn) => (req, res, next) => fn(req, res).catch(next);
 
+app.get('/', (_req, res) => {
+  res.json({
+    message: 'Smoke Out Backend Server',
+    status: 'Node.js 서버 실행 성공',
+  });
+});
+
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// ==========================================
+// [회원가입 & 로그인 API] - 쯔엉 후이 황 담당
+// ==========================================
+const handleSignup = wrap(async (req, res) => {
+  const result = await registerUser(req.body);
+  res.status(201).json(result);
+});
+
+const handleLogin = wrap(async (req, res) => {
+  const result = await loginUser(req.body);
+  res.json(result);
+});
+
+app.post(['/api/signup', '/api/register', '/api/auth/signup', '/api/auth/register'], handleSignup);
+app.post(['/api/login', '/api/auth/login'], handleLogin);
 
 app.get('/api/exercises', wrap(async (_req, res) => {
   const { rows } = await pool.query('SELECT * FROM exercises WHERE is_active ORDER BY exercise_id');
@@ -207,12 +243,33 @@ app.delete('/api/notifications/fcm-token', wrap(async (req, res) => {
 
 app.use((error, _req, res, _next) => {
   if (error instanceof z.ZodError) {
-    return res.status(400).json({ error: 'validation', details: error.issues });
+    return res.status(400).json({
+      success: false,
+      error: 'validation',
+      message: error.issues[0]?.message ?? '입력값이 올바르지 않습니다.',
+      details: error.issues,
+    });
   }
-  if (error.code === '23505') return res.status(409).json({ error: 'duplicate' });
-  if (error.code === '23503') return res.status(404).json({ error: 'referenced row not found' });
+  if (error.code === '23505') {
+    return res.status(409).json({
+      success: false,
+      error: 'duplicate',
+      message: '이미 존재하는 데이터입니다.',
+    });
+  }
+  if (error.code === '23503') {
+    return res.status(404).json({
+      success: false,
+      error: 'referenced row not found',
+      message: '참조된 데이터를 찾을 수 없습니다.',
+    });
+  }
   console.error(error);
-  res.status(error.status ?? 500).json({ error: error.message });
+  res.status(error.status ?? 500).json({
+    success: false,
+    error: error.message,
+    message: error.message,
+  });
 });
 
 app.listen(process.env.PORT ?? 3000, () => {

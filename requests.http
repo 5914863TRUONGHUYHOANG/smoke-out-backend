@@ -4,6 +4,28 @@
 
 GET {{host}}/health
 
+### 회원가입 (Signup / Register)
+POST {{host}}/api/signup
+Content-Type: application/json
+
+{
+  "email": "test@gmail.com",
+  "password": "password123",
+  "nickname": "Tester",
+  "dailyCigaretteCount": 10,
+  "packPrice": 4500,
+  "fitnessLevel": "BEGINNER"
+}
+
+### 로그인 (Login)
+POST {{host}}/api/login
+Content-Type: application/json
+
+{
+  "email": "test@gmail.com",
+  "password": "password123"
+}
+
 ### 전체 포인트 랭킹 (기본 상위 50명, 최대 100명)
 GET {{host}}/api/rankings?limit=50
 x-user-id: {{uid}}
