@@ -44,7 +44,7 @@ async function enqueueDueNotifications() {
             to_char(u.last_access_at AT TIME ZONE 'UTC', 'YYYYMMDDHH24MISSUS') AS access_key
      FROM users u
      WHERE u.last_access_at <= NOW() - INTERVAL '24 hours'
-       AND EXISTS (SELECT 1 FROM fcm_device_tokens t WHERE t.user_id = u.user_id::text)`
+       AND EXISTS (SELECT 1 FROM fcm_device_tokens t WHERE t.user_id = u.user_id)`
   );
 
   for (const user of inactiveUsers) {

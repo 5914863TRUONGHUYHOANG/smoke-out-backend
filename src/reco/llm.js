@@ -1,11 +1,16 @@
 import { pickValid } from './ranking.js';
 
-// OpenAI 호환 Chat Completions API. 키가 없거나 실패하면 null → 호출자가 규칙 기반으로 폴백
+// Google Gemini / OpenAI 호환 Chat Completions API
 export async function chooseWithLLM(candidates, ctx) {
-  const { LLM_API_KEY, LLM_BASE_URL, LLM_MODEL } = process.env;
-  if (!LLM_API_KEY || !LLM_MODEL) return null;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
+  if (!apiKey) return null;
 
-  // 자유 텍스트는 넣지 않는다(프롬프트 인젝션 차단). 구조화된 값과 DB의 운동 정보만 전달
+  const isGemini = Boolean(process.env.GEMINI_API_KEY) || (process.env.LLM_MODEL?.toLowerCase().includes('gemini'));
+  const baseUrl = process.env.LLM_BASE_URL || (isGemini
+    ? 'https://generativelanguage.googleapis.com/v1beta/openai'
+    : 'https://api.openai.com/v1');
+  const model = process.env.LLM_MODEL || 'gemini-1.5-flash';
+
   const list = candidates.map((c) => ({
     exerciseId: Number(c.exercise.exercise_id), title: c.exercise.title,
     minutes: c.exercise.duration_minutes, intensity: c.exercise.intensity,
@@ -19,17 +24,26 @@ export async function chooseWithLLM(candidates, ctx) {
     candidates: list });
 
   try {
-    const res = await fetch(`${LLM_BASE_URL ?? 'https://api.openai.com/v1'}/chat/completions`, {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${LLM_API_KEY}` },
-      body: JSON.stringify({ model: LLM_MODEL, temperature: 0.2, response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
-      signal: AbortSignal.timeout(8000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      }),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      console.error('[Gemini Reco LLM Error]:', err);
+      return null;
+    }
     const data = await res.json();
     return pickValid(JSON.parse(data.choices?.[0]?.message?.content ?? '{}'), candidates);
-  } catch {
+  } catch (err) {
+    console.error('[Gemini Reco LLM Exception]:', err);
     return null;
   }
 }

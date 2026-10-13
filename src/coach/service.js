@@ -18,7 +18,9 @@ const clip = (s) => (s.length > LIMITS.toolResultChars ? s.slice(0, LIMITS.toolR
 
 export async function coachChat(userId, message, deps = defaultDeps) {
   const { chat, db } = deps;
-  if (!deps.configured()) throw fail(503, 'AI coach is not configured (set LLM_API_KEY and LLM_MODEL)');
+  if (!deps.configured()) {
+    throw fail(503, 'AI 코치가 설정되지 않았습니다. backend의 .env 파일에 GEMINI_API_KEY를 입력해주세요.');
+  }
 
   const { rows: [cnt] } = await db.query(
     `SELECT COUNT(*)::int AS n FROM coach_messages WHERE user_id=$1 AND role='user' AND created_at > now() - interval '1 day'`, [userId]);
@@ -33,23 +35,32 @@ export async function coachChat(userId, message, deps = defaultDeps) {
   const toolsUsed = [];
   let reply = null;
 
-  for (let round = 0; round < LIMITS.maxRounds && reply === null; round++) {
-    const msg = await chat({ messages, tools: TOOL_DEFS });
-    const calls = msg.tool_calls ?? [];
-    if (!calls.length) { reply = (msg.content ?? '').trim(); break; }
+  try {
+    for (let round = 0; round < LIMITS.maxRounds && reply === null; round++) {
+      const msg = await chat({ messages, tools: TOOL_DEFS });
+      const calls = msg.tool_calls ?? [];
+      if (!calls.length) { reply = (msg.content ?? '').trim(); break; }
 
-    messages.push({ role: 'assistant', content: msg.content ?? null, tool_calls: calls });
-    for (const call of calls.slice(0, LIMITS.maxToolCallsPerRound)) {
-      toolsUsed.push(call.function.name);
-      const result = await executeTool(call.function.name, call.function.arguments, { db, userId, state });
-      messages.push({ role: 'tool', tool_call_id: call.id, content: clip(JSON.stringify(result)) });
+      messages.push({ role: 'assistant', content: msg.content ?? null, tool_calls: calls });
+      for (const call of calls.slice(0, LIMITS.maxToolCallsPerRound)) {
+        toolsUsed.push(call.function.name);
+        const result = await executeTool(call.function.name, call.function.arguments, { db, userId, state });
+        messages.push({ role: 'tool', tool_call_id: call.id, content: clip(JSON.stringify(result)) });
+      }
+      for (const call of calls.slice(LIMITS.maxToolCallsPerRound))
+        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ error: 'too many tool calls' }) });
     }
-    // every tool_call id must be answered, even the ones we skipped
-    for (const call of calls.slice(LIMITS.maxToolCallsPerRound))
-      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ error: 'too many tool calls' }) });
+  } catch (err) {
+    console.warn('[Coach LLM Error, activating supportive fallback]:', err.message);
+    const { rows: safeEx } = await db.query(
+      'SELECT title, duration_minutes, instructions FROM exercises WHERE is_active ORDER BY RANDOM() LIMIT 1'
+    );
+    const ex = safeEx[0];
+    const suggestion = ex ? ` Bạn có thể thử ngay bài tập "${ex.title}" (${ex.duration_minutes} phút): ${ex.instructions}` : '';
+    reply = `Cơn thèm thuốc thường chỉ kéo dài từ 3-5 phút rồi sẽ giảm dần. Hãy hít thật sâu và thở ra từ từ, uống một ly nước lọc để lấy lại bình tĩnh nhé!${suggestion} Cố lên, bạn nhất định sẽ làm được! 💪`;
   }
 
-  if (!reply) reply = 'Sorry, I could not finish that. Please try again in a moment.';
+  if (!reply) reply = 'Cơn thèm thuốc sẽ nhanh chóng qua đi. Hãy uống một ngụm nước và hít thở sâu nhé!';
 
   await db.query('INSERT INTO coach_messages(user_id,role,content) VALUES($1,$2,$3)', [userId, 'user', message]);
   await db.query('INSERT INTO coach_messages(user_id,role,content,meta) VALUES($1,$2,$3,$4)',
