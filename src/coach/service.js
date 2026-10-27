@@ -60,7 +60,7 @@ export async function coachChat(userId, message, deps = defaultDeps) {
     reply = `Cơn thèm thuốc thường chỉ kéo dài từ 3-5 phút rồi sẽ giảm dần. Hãy hít thật sâu và thở ra từ từ, uống một ly nước lọc để lấy lại bình tĩnh nhé!${suggestion} Cố lên, bạn nhất định sẽ làm được! 💪`;
   }
 
-  if (!reply) reply = 'Cơn thèm thuốc sẽ nhanh chóng qua đi. Hãy uống một ngụm nước và hít thở sâu nhé!';
+  if (!reply) reply = 'Sorry, I could not finish that in time. Cơn thèm thuốc sẽ nhanh chóng qua đi. Hãy uống một ngụm nước và hít thở sâu nhé!';
 
   await db.query('INSERT INTO coach_messages(user_id,role,content) VALUES($1,$2,$3)', [userId, 'user', message]);
   await db.query('INSERT INTO coach_messages(user_id,role,content,meta) VALUES($1,$2,$3,$4)',

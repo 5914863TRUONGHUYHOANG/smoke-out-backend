@@ -17,6 +17,7 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
 const PUBLIC_API_PATHS = new Set([
+  '/test',
   '/login',
   '/signup',
   '/register',
@@ -73,6 +74,7 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/test', (_req, res) => res.json({ ok: true, message: 'Smoke Out Backend Server is running!' }));
 
 // ==========================================
 // [회원가입 & 로그인 API] - 쯔엉 후이 황 담당
