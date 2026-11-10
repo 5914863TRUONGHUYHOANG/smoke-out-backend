@@ -9,7 +9,7 @@ export async function chooseWithLLM(candidates, ctx) {
   const baseUrl = process.env.LLM_BASE_URL || (isGemini
     ? 'https://generativelanguage.googleapis.com/v1beta/openai'
     : 'https://api.openai.com/v1');
-  const model = process.env.LLM_MODEL || 'gemini-1.5-flash';
+  const model = process.env.LLM_MODEL || 'gemini-3.8-flash';
 
   const list = candidates.map((c) => ({
     exerciseId: Number(c.exercise.exercise_id), title: c.exercise.title,
